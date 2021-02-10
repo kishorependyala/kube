@@ -1,0 +1,7 @@
+
+docker ps -a
+docker images -a
+docker system prune
+docker rmi $(docker images -a -q)
+
+docker run -d --network host image-name

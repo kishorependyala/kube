@@ -1,0 +1,20 @@
+
+top-level:
+  oc process -f template.yaml --param-file=param-file --ignore-unknown-parameters=true | oc create -f -
+  oc describe
+  oc get all -l app=appname
+
+build:
+
+
+deploy:
+
+
+service:
+
+
+route:
+
+
+template:
+    oc get --export bc/name -o yaml
