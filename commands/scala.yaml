@@ -1,0 +1,4 @@
+
+class SampleRow(val id:Integer, val name:String)
+
+val dataset = sc.parallelize(Seq((1,"Spark"), (2,"Databricks"),(3,"Notebook"))).toDF("Id","Name").as[(Int,String)]

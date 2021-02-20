@@ -1,0 +1,4 @@
+show schemas;
+use <schema_name>;
+use table;
+select * from schema.table_name;

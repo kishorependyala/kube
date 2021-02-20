@@ -1,6 +1,19 @@
-git init
-git add .
-git commit -m "commit message"
-git remote add origin git-url
-git remote -v
-git push -u origin master
+
+new-project:
+  git init
+  git add .
+  git commit -m "commit message"
+  git remote add origin git-url
+  git remote -v
+  git push -u origin master
+
+
+
+branch:
+  git checkout master
+  git chekcout -b branch-name
+  git push -u origin branch-name
+
+
+commit:
+    git commit -a -m "udpate" && git push
