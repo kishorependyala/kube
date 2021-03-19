@@ -13,6 +13,8 @@ branch:
   git checkout master
   git chekcout -b branch-name
   git push -u origin branch-name
+  git branch -d localbranch
+  git push origin --delete remoteBranchName
 
 
 commit:

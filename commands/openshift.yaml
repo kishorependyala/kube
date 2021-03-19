@@ -7,6 +7,8 @@ top-level:
   podman login -u $USER quay.io
 
 build:
+  oc describte bc/name
+
   env:
     oc set env bc simple --list
     oc set env bc simple key=value
@@ -20,18 +22,34 @@ build:
   webhook:
     curl -X POST -k ${MA}/apis/build.openshift.io/v1/namespaces/${USER}-build-app/buildConfigs/simple/webhooks/{SECRET}/generic
 
+  s2i:
+    s2i version
+    s2i create name name
+    tree -a name
+    s2i build test/test-app/s2i-do288-httpd s2i-sample-app --as-dockerfile ~/s2i-sample-app/Dockerfile
+    sudo podman build --from docker -t s2i-sample-app .
+    sudo podman run --name test -u 1234 -p 8080:8080 -d s2i-sample-app
+
+    oc describe istag nodejs:12 -n openshift | grep io.openshift.s2i.scripts-url
 
 deploy:
-
-service:
+    oc set env dc/myapp --from configmap/myappconf
+    oc set volume dc/myapp --add -t secret -m /opt/app-root/secure --name myappsec-vol --secret-name myappfilesec
+    oc rollout latest dc/myapp
+    oc rollback dc/myapp
 
 route:
   oc get route -n openshift-image-registry
   IMAGE_STREAM=$(oc get route default-route -n openshift-image-registry -o jsonpath=${.spec.host})
 
-
-
 template:
+  oc get -o yaml is > is.yaml
+  oc get -o yaml bc > bc.yaml
+  oc get -o yaml dc > dc.yaml
+  oc get -o yaml svc > svc.yaml
+  oc get -o yaml route > route.yaml
+  oc get -o yaml pvc > route.yaml
+
   oc get --export bc/name -o yaml
   oc get templates -n openshift
   oc get -o yaml -n openshift template <name>
@@ -40,22 +58,20 @@ template:
   oc api-resources
 
 images:
-  oc import-image hello-world --confirm --from quay.io/redhattrainig/hello-world-nginx
   oc get istag
   oc describe is hello-world
-  oc import-image php --from quay.io/$QU/php-70-rhel7 --confirm
+  oc import-image hello-world                       --from quay.io/redhattrainig/hello-world-nginx  --confirm
+  oc import-image php                               --from quay.io/$QU/php-70-rhel7                 --confirm
+  oc import-image php-info --reference-policy=local --from quay.io/kishorependyala/php-info:1.0     --confirm
+
 
 skopeo:
   skopeo copy --dest-creds USER:TOKEN oci:/local_oci_image docker:/IMAGE_STREAM/Project/app:1.0
   skopeo copy oci:/local docker:/quay.io/kishorependyala/app:1.0
   skopeo inspect docker://quay.io/kishorependyala/php-info:1.0
   skopeo copy --docker-archive:abc.tar.gz docker://quay.io/user/app:latest
-
-secret:
-  oc create secret quayio --from-file .dockerconfigjson=/run/user/1000/containers/auth.json --type kubernetes.io/dockerconfigjson
-  oc import-image php-info --confirm --reference-policy=local --from quay.io/kishorependyala/php-info:1.0
-  oc policy add-role-to-group -n project1 system:image-puller system:serviceaccounts:project2
-  oc secrets link builder secret-name
+  skopeo copy containers-storage:localhost:imagename docker://quay.io/$QU/imagename
+  skopeo delete docker://quay.io/$QU/imagename
 
 new-app:
   oc new-app --as-deployment-config --name test -i project/image
@@ -67,12 +83,48 @@ new-app:
   oc new-app --as-deployment-config --name trigger php~http://github.com/user/app --context-dir trigger-builds
   oc new-app --as-deployment-config --name hook php:7.3~http://github.com/user/app --context-dir post-commit
 
-  s2i:
-    oc new-app --as-deployment-config --name bonjour httpd:2.4~https://github.com/user/DO288-apps --context-dir s2i-scripts
+  oc new-app --as-deployment-config --name bonjour httpd:2.4~https://github.com/user/DO288-apps --context-dir s2i-scripts
+
+  oc new-app --as-deployment-config --name tododb  --docker-image registry.access.redhat.com/rhscl/mysql-57-rhel7 \
+  -e MYSQL_USER=todoapp  -e MYSQL_PASSWORD=mypass  -e MYSQL_DATABASE=todo
+
+  oc new-app --as-deployment-config --name backend --build-env npm_config_registry= http://${RHT_OCP4_NEXUS_SERVER}/repository/nodejs \
+  -e DATABASE_NAME=todo  -e DATABASE_USER=todoapp  -e DATABASE_PASSWORD=mypass \
+  -e DATABASE_SVC=tododb  --context-dir todo-backend \
+  nodejs:12~https://github.com/${RHT_OCP4_GITHUB_USER}/DO288-apps#review-service
 
 trigger:
-  oc describte bc/name
   oc set triggers bc/name --from-image=project/image:tag
   oc set triggers bc/name --from-image=project/image:tag --remove
   oc set triggers bc/name --from-gitlab
   oc set triggers bc/name --from-gitlab --remove
+
+configmap:
+  oc create configmap myappconf --from-literal APP_MSG="Test Message"
+  oc describe cm/myappconf
+  oc edit cm/myappconf
+  oc create cm todoapp --from-literal init=true
+
+env:
+  oc set env dc/backend --prefix=DATABASE_ --from=cm/todoapp
+  oc set env dc/backend --list
+
+secret:
+  oc create secret quayio --from-file .dockerconfigjson=/run/user/1000/containers/auth.json --type kubernetes.io/dockerconfigjson
+  oc create secret generic myappfilesec --from-file file.sec ( username=user1 password=pass1 salt=xyz123 )
+  oc create secret generic tododb --from-literal user=todoapp --from-literal password=mypass
+
+  oc secrets link builder secret-name
+  oc get secret/myappfilesec -o json
+
+policy:
+  oc policy add-role-to-group -n project1 system:image-puller system:serviceaccounts:project2
+
+probes:
+  oc set probe dc/probes --liveness --get-url=http://:8080/healthz --initial-delay-seconds=2 --timeout-seconds=2
+  oc set probe dc/probes --readiness --get-url=http://:8080/ready --initial-delay-seconds=2 --timeout-seconds=2
+
+
+
+
+
